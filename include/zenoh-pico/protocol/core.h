@@ -77,7 +77,6 @@ static inline _z_entity_global_id_t _z_entity_global_id_null(void) { return (_z_
 static inline bool _z_entity_global_id_check(const _z_entity_global_id_t *info) {
     return _z_id_check(info->zid) || info->eid != 0;
 }
-z_result_t _z_entity_global_id_copy(_z_entity_global_id_t *dst, const _z_entity_global_id_t *src);
 
 /**
  * A zenoh timestamp.
