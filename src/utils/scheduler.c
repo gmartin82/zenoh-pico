@@ -315,6 +315,12 @@ void *_zp_periodic_scheduler_task(void *arg) {
             z_clock_advance_ms(&wait_abs, wait_ms);
             _z_condvar_wait_until(&scheduler->_condvar, &scheduler->_mutex, &wait_abs);
         }
+
+        if (!scheduler->_task_running) {
+            _z_mutex_unlock(&scheduler->_mutex);
+            break;
+        }
+
         _z_mutex_unlock(&scheduler->_mutex);
         res = _zp_periodic_scheduler_process_tasks(scheduler);
         if (res != _Z_RES_OK) {
