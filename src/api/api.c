@@ -834,7 +834,7 @@ void z_open_options_default(z_open_options_t *options) {
     options->auto_start_admin_space = false;
 #endif
     options->connect_timeout_ms = 0;
-    options->connect_wait_for_all = false;
+    options->connect_wait_for_all = true;
 #if Z_FEATURE_MULTI_THREAD == 1
     options->auto_start_lease_task = false;
     options->auto_start_read_task = true;
