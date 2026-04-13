@@ -66,6 +66,7 @@ static void test_open_timeout_partial_connectivity(void) {
     z_owned_session_t s2;
 
     assert(z_open(&s1, z_move(c1), NULL) == _Z_RES_OK);
+    z_sleep_s(1);  // Ensure the listener is fully up before connecting
 
     z_open_options_t opts;
     z_open_options_default(&opts);
@@ -163,6 +164,7 @@ static void test_open_wait_for_all_false(void) {
     z_owned_session_t s2;
 
     assert(z_open(&s1, z_move(c1), NULL) == _Z_RES_OK);
+    z_sleep_s(1);  // Ensure the listener is fully up before connecting
 
     z_open_options_t opts;
     z_open_options_default(&opts);
@@ -181,12 +183,12 @@ static void test_open_wait_for_all_false(void) {
 }
 
 int main(void) {
-#if Z_FEATURE_MULTI_THREAD == 1
-    test_open_late_joining_endpoint();
-#endif
     test_open_timeout_single_locator();
 #if Z_FEATURE_UNICAST_PEER == 1
     test_open_timeout_partial_connectivity();
+#endif
+#if Z_FEATURE_MULTI_THREAD == 1
+    test_open_late_joining_endpoint();
 #endif
     test_open_wait_for_all_false();
     return 0;
