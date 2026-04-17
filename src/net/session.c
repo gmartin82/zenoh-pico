@@ -326,7 +326,7 @@ static z_result_t _z_open_connect_locator(_z_session_rc_t *zn, const _z_string_s
     out->transport_opened = false;
     out->remaining_timeout_ms = timeout_ms;
 
-    if ((connect_len == 0)) {
+    if (connect_len == 0) {
         return _Z_ERR_CONFIG_LOCATOR_INVALID;
     }
 
