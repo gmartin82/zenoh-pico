@@ -833,8 +833,6 @@ void z_open_options_default(z_open_options_t *options) {
 #if Z_FEATURE_ADMIN_SPACE == 1
     options->auto_start_admin_space = false;
 #endif
-    options->connect_timeout_ms = 0;
-    options->connect_wait_for_all = true;
 #if Z_FEATURE_MULTI_THREAD == 1
     options->auto_start_lease_task = false;
     options->auto_start_read_task = true;
@@ -909,7 +907,7 @@ z_result_t z_open(z_owned_session_t *zs, z_moved_config_t *config, const z_open_
         return ret;
     }
 
-    ret = _z_open(&zs->_rc, cfg, opts.connect_timeout_ms, opts.connect_wait_for_all, &zid);
+    ret = _z_open(&zs->_rc, cfg, &zid);
     _Z_SET_IF_OK(ret, _zp_start_transport_tasks(_Z_RC_IN_VAL(&zs->_rc)));
     if (ret != _Z_RES_OK) {
         z_session_drop(z_session_move(zs));

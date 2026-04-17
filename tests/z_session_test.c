@@ -16,37 +16,31 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "utils/assert_helpers.h"
 #include "zenoh-pico.h"
 #include "zenoh-pico/api/macros.h"
 #include "zenoh-pico/api/primitives.h"
 
-#undef NDEBUG
-#include <assert.h>
-
 static void test_open_timeout_single_locator(void) {
     z_owned_config_t c;
-
     z_config_default(&c);
 
     zp_config_insert(z_loan_mut(c), Z_CONFIG_MODE_KEY, "peer");
     zp_config_insert(z_loan_mut(c), Z_CONFIG_CONNECT_KEY, "tcp/127.0.0.1:18002");
+    zp_config_insert(z_loan_mut(c), Z_CONFIG_CONNECT_TIMEOUT_KEY, "1000");
 
     z_owned_session_t s;
 
-    z_open_options_t opts;
-    z_open_options_default(&opts);
-    opts.connect_timeout_ms = 1000;
-
     z_clock_t start = z_clock_now();
-    z_result_t ret = z_open(&s, z_move(c), &opts);
+    z_result_t ret = z_open(&s, z_move(c), NULL);
     unsigned long elapsed_ms = z_clock_elapsed_ms(&start);
 
-    assert(ret == _Z_ERR_TRANSPORT_OPEN_FAILED);
-    assert(elapsed_ms >= 1000);
+    ASSERT_ERR(ret, _Z_ERR_TRANSPORT_OPEN_FAILED);
+    ASSERT_TRUE(elapsed_ms >= 1000);
 }
 
 #if Z_FEATURE_UNICAST_PEER == 1
-static void test_open_timeout_partial_connectivity(void) {
+static void _test_open_timeout_partial_connectivity(const char *connect_exit_on_failure, z_result_t expected_ret) {
     z_owned_config_t c1;
     z_owned_config_t c2;
 
@@ -61,26 +55,35 @@ static void test_open_timeout_partial_connectivity(void) {
     zp_config_insert(z_loan_mut(c2), Z_CONFIG_MODE_KEY, "peer");
     zp_config_insert(z_loan_mut(c2), Z_CONFIG_CONNECT_KEY, "tcp/127.0.0.1:18001");
     zp_config_insert(z_loan_mut(c2), Z_CONFIG_CONNECT_KEY, "tcp/127.0.0.1:18002");
+    zp_config_insert(z_loan_mut(c2), Z_CONFIG_CONNECT_TIMEOUT_KEY, "1000");
+    zp_config_insert(z_loan_mut(c2), Z_CONFIG_CONNECT_EXIT_ON_FAILURE_KEY, connect_exit_on_failure);
 
     z_owned_session_t s1;
     z_owned_session_t s2;
 
-    assert(z_open(&s1, z_move(c1), NULL) == _Z_RES_OK);
+    ASSERT_OK(z_open(&s1, z_move(c1), NULL));
     z_sleep_s(1);  // Ensure the listener is fully up before connecting
 
-    z_open_options_t opts;
-    z_open_options_default(&opts);
-    opts.connect_timeout_ms = 1000;
-
     z_clock_t start = z_clock_now();
-    z_result_t ret = z_open(&s2, z_move(c2), &opts);
+    z_result_t ret = z_open(&s2, z_move(c2), NULL);
     unsigned long elapsed_ms = z_clock_elapsed_ms(&start);
 
-    assert(ret == _Z_ERR_TRANSPORT_OPEN_PARTIAL_CONNECTIVITY);
-    assert(elapsed_ms >= 1000);
+    ASSERT_ERR(ret, expected_ret);
+
+    if (expected_ret == _Z_ERR_TRANSPORT_OPEN_FAILED) {
+        ASSERT_TRUE(elapsed_ms >= 1000);
+    }
 
     z_drop(z_move(s2));
     z_drop(z_move(s1));
+}
+
+static void test_open_timeout_partial_connectivity_exit_on_failure_false(void) {
+    _test_open_timeout_partial_connectivity("false", _Z_RES_OK);
+}
+
+static void test_open_timeout_partial_connectivity_exit_on_failure_true(void) {
+    _test_open_timeout_partial_connectivity("true", _Z_ERR_TRANSPORT_OPEN_PARTIAL_CONNECTIVITY);
 }
 #endif
 
@@ -115,6 +118,7 @@ static void test_open_late_joining_endpoint(void) {
     // Connecting peer
     zp_config_insert(z_loan_mut(c2), Z_CONFIG_MODE_KEY, "peer");
     zp_config_insert(z_loan_mut(c2), Z_CONFIG_CONNECT_KEY, "tcp/127.0.0.1:18001");
+    zp_config_insert(z_loan_mut(c2), Z_CONFIG_CONNECT_TIMEOUT_KEY, "5000");
 
     delayed_open_arg_t ctx;
     ctx.config = c1;
@@ -122,74 +126,32 @@ static void test_open_late_joining_endpoint(void) {
     ctx.ret = _Z_ERR_GENERIC;
 
     _z_task_t task;
-    assert(_z_task_init(&task, NULL, delayed_open_task, &ctx) == _Z_RES_OK);
-
-    z_open_options_t opts;
-    z_open_options_default(&opts);
-    opts.connect_timeout_ms = 5000;
+    ASSERT_OK(_z_task_init(&task, NULL, delayed_open_task, &ctx));
 
     z_owned_session_t s2;
     z_clock_t start = z_clock_now();
-    z_result_t ret = z_open(&s2, z_move(c2), &opts);
+    z_result_t ret = z_open(&s2, z_move(c2), NULL);
     unsigned long elapsed_ms = z_clock_elapsed_ms(&start);
 
-    assert(ret == _Z_RES_OK);
-    assert(elapsed_ms >= 1000);
+    ASSERT_OK(ret);
+    ASSERT_TRUE(elapsed_ms >= 1000);
 
-    assert(_z_task_join(&task) == _Z_RES_OK);
-    assert(ctx.ret == _Z_RES_OK);
+    ASSERT_OK(_z_task_join(&task));
+    ASSERT_OK(ctx.ret);
 
     z_drop(z_move(s2));
     z_drop(z_move(ctx.session));
 }
 #endif
 
-static void test_open_wait_for_all_false(void) {
-    z_owned_config_t c1;
-    z_owned_config_t c2;
-
-    z_config_default(&c1);
-    z_config_default(&c2);
-
-    // Listener peer
-    zp_config_insert(z_loan_mut(c1), Z_CONFIG_MODE_KEY, "peer");
-    zp_config_insert(z_loan_mut(c1), Z_CONFIG_LISTEN_KEY, "tcp/127.0.0.1:18001");
-
-    // Connecting peer: one good endpoint, one bad endpoint
-    zp_config_insert(z_loan_mut(c2), Z_CONFIG_MODE_KEY, "peer");
-    zp_config_insert(z_loan_mut(c2), Z_CONFIG_CONNECT_KEY, "tcp/127.0.0.1:18001");
-    zp_config_insert(z_loan_mut(c2), Z_CONFIG_CONNECT_KEY, "tcp/127.0.0.1:18002");
-
-    z_owned_session_t s1;
-    z_owned_session_t s2;
-
-    assert(z_open(&s1, z_move(c1), NULL) == _Z_RES_OK);
-    z_sleep_s(1);  // Ensure the listener is fully up before connecting
-
-    z_open_options_t opts;
-    z_open_options_default(&opts);
-    opts.connect_timeout_ms = 1000;
-    opts.connect_wait_for_all = false;
-
-    z_clock_t start = z_clock_now();
-    z_result_t ret = z_open(&s2, z_move(c2), &opts);
-    unsigned long elapsed_ms = z_clock_elapsed_ms(&start);
-
-    assert(ret == _Z_RES_OK);
-    assert(elapsed_ms < 1000);
-
-    z_drop(z_move(s2));
-    z_drop(z_move(s1));
-}
-
 int main(void) {
     test_open_timeout_single_locator();
 #if Z_FEATURE_UNICAST_PEER == 1
-    test_open_timeout_partial_connectivity();
+    test_open_timeout_partial_connectivity_exit_on_failure_false();
+    test_open_timeout_partial_connectivity_exit_on_failure_true();
 #endif
 #if Z_FEATURE_MULTI_THREAD == 1
     test_open_late_joining_endpoint();
 #endif
-    test_open_wait_for_all_false();
     return 0;
 }

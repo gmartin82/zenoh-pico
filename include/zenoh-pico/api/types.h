@@ -176,35 +176,6 @@ typedef struct {
  * Represents the configuration used to configure a zenoh session upon opening :c:func:`z_open`.
  *
  * Members:
- *   uint32_t connect_timeout_ms:
- *     Maximum time (in milliseconds) spent attempting to establish outbound
- *     connections to configured endpoints during ``z_open()``.
- *
- *     Default: `0`
- *
- *     Semantics:
- *       - `0`  : No waiting. Each configured endpoint is attempted once.
- *       - `>0` : Connection attempts are retried until either the success condition is met or the timeout expires.
- *
- *     Negative values are not supported.
- *
- *   bool connect_wait_for_all:
- *     If `true`, ``z_open()`` will require full connectivity to all configured
- *     `connect` endpoints associated with unicast peers, and may wait up to
- *     `connect_timeout_ms`.
- *
- *     If the timeout expires before all endpoints are connected, but at least
- *     one connection was established, ``z_open()`` returns
- *     ``_Z_ERR_TRANSPORT_OPEN_PARTIAL_CONNECTIVITY``.
- *
- *     If `false`, ``z_open()`` retries connection attempts until at least one
- *     connection is established or the timeout expires. After a connection is
- *     established, remaining endpoints are attempted once without retry.
- *
- *     Default: `true`.
- *
- *     This option applies only when unicast peer support is enabled.
- *
  *   bool auto_start_read_task: Deprecated, if Z_FEATURE_MULTI_THREAD is enabled background tasks are
  * now started automatically when session is created.
  *   bool auto_start_lease_task: Deprecated, if Z_FEATURE_MULTI_THREAD is enabled background tasks are now started
@@ -215,8 +186,6 @@ typedef struct {
  * false; only when admin space feature is enabled).
  */
 typedef struct {
-    uint32_t connect_timeout_ms;
-    bool connect_wait_for_all;
 #if Z_FEATURE_MULTI_THREAD == 1
     bool auto_start_read_task;
     bool auto_start_lease_task;
